@@ -30,7 +30,6 @@ jobs:
         run: |
           pyinstaller main.py \
             --name "Loadcell-Viewer" \
-            --onefile \
             --windowed \
             --add-data "utils:utils"
 
@@ -39,44 +38,40 @@ jobs:
         run: |
           pyinstaller main.py `
             --name "Loadcell-Viewer" `
-            --onefile `
             --windowed `
             --add-data "utils;utils"
-      
-      - name: Prepare macOS Artifact
-        if: runner.os == 'macOS'
-        run: zip -r Loadcell-Viewer-macOS.zip dist/Loadcell-Viewer.app
 
-      - name: Upload macOS Artifact
-        if: runner.os == 'macOS'
+      - name: Package build artifacts
+        run: |
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            zip -r Loadcell-Viewer-macOS.zip dist/Loadcell-Viewer.app
+          elif [ "${{ runner.os }}" == "Windows" ]; then
+            7z a -tzip Loadcell-Viewer-Windows.zip ./dist/Loadcell-Viewer/*
+          fi
+        shell: bash
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-artifact
-          path: Loadcell-Viewer-macOS.zip
-
-      - name: Upload Windows Artifact
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifact
-          path: dist/Loadcell-Viewer.exe
+          name: ${{ runner.os }}-artifact
+          path: ./*.zip
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build # 모든 'build' 작업이 성공해야만 실행됩니다
+    needs: build
     permissions:
-      contents: write # 릴리즈를 생성하기 위해 필수적인 권한입니다
+      contents: write
 
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts # 아티팩트를 artifacts 폴더에 다운로드합니다
+          path: artifacts
 
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/macos-artifact/*
-            artifacts/windows-artifact/*
+            artifacts/macOS-latest-artifact/*.zip
+            artifacts/Windows-latest-artifact/*.zip
