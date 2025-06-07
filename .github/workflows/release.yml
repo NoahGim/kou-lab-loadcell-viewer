@@ -1,0 +1,47 @@
+name: Create Release and Build Executables
+
+on:
+  push:
+    tags:
+      - 'v*' # v로 시작하는 태그가 푸시되면 이 워크플로우가 실행됩니다 (예: v1.0, v1.1)
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }} # macOS와 Windows에서 각각 실행됩니다
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12' 
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller main.py \
+            --name "Loadcell-Viewer" \
+            --onefile \
+            --windowed \
+            --add-data "utils:utils"
+      
+      - name: Package macOS executable
+        if: runner.os == 'macOS'
+        run: |
+          zip -r Loadcell-Viewer-macOS.zip dist/Loadcell-Viewer.app
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/Loadcell-Viewer.exe
+            Loadcell-Viewer-macOS.zip
