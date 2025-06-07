@@ -2,16 +2,18 @@ import re
 
 def parse_loadcell(line: str):
     """
-    [LoadCell] Cell 1: -57 | Cell 2: 7 ...
-    형식의 문자열에서 N개 로드셀 값을 리스트로 반환
+    [LoadCell] Cell 1: -57 | Cell 4: 100 ...
+    형식의 문자열에서 (셀 인덱스, 값) 튜플의 리스트를 반환
+    (예: [(0, -57), (3, 100)])
     """
     if not line.startswith('[LoadCell]'):
         return None
-    # 'Cell <number>: <value>' 패턴을 모두 찾음
-    pattern = r'Cell\s*\d+:\s*([\-\d]+)'
+    # 'Cell <number>: <value>' 패턴을 모두 찾아 숫자와 값을 캡처
+    pattern = r'Cell\s*(\d+):\s*([\-\d]+)'
     matches = re.findall(pattern, line)
     if matches:
-        return [int(value) for value in matches]
+        # 셀 번호는 1-based이므로 0-based 인덱스로 변환
+        return [(int(num) - 1, int(val)) for num, val in matches]
     return None
 
 def parse_motor(line: str):
