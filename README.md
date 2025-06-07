@@ -1,26 +1,22 @@
-# 로드셀 & 모터 RPM 실시간 측정/시각화 프로그램
+# Real-time Loadcell & RPM Viewer
 
-## 프로젝트 개요
-이 프로그램은 영재원 프로젝트(로터세일 풍동장치)에서 4개의 로드셀과 인코더 모터(RPM)를 실시간으로 측정하고, 그래프로 시각화하며, 원하는 구간의 데이터를 CSV 파일로 저장할 수 있도록 설계되었습니다.
+## Overview
+This program is designed to measure, visualize, and log data from 2 loadcells and an encoder motor (RPM) in real-time. It's built for lab experiments, providing a user-friendly interface to manage device connections, monitor data, and save experiment logs.
 
-- **로드셀 4개**: 로터세일 위/아래에 2개씩 설치, 마그누스 힘 측정
-- **인코더 모터**: 로터세일 회전 속도(RPM) 측정
-- **아두이노**: 센서값을 USB 시리얼로 PC에 전송
-- **PC(Python)**: 시리얼 데이터 수신, 실시간 그래프, 데이터 저장
-
----
-
-## 주요 기능
-- 2개 로드셀 값과 모터 RPM을 실시간 그래프로 표시
-- 그래프의 현재값을 숫자로 표시하고, 마우스 호버 시 정확한 값 확인 가능
-- "Start"/"Stop" 버튼으로 원하는 구간만 데이터 로깅
-- 실험명을 입력하여 저장되는 CSV 파일명에 포함 가능
-- 로깅된 데이터는 CSV 파일로 저장(시간, 2개 로드셀, RPM)
-- mock 데이터로 하드웨어 없이도 테스트 가능
+## Key Features
+- **Manual Connection Control**: Connect to and disconnect from your serial device manually.
+- **Persistent Port Name**: The last used serial port is automatically saved and reloaded.
+- **Live Data Visualization**: Displays data from 2 loadcells and motor RPM on separate, real-time graphs.
+- **Current Value & Hover Display**: Shows the latest numerical values and provides detailed data points on mouse hover.
+- **Experiment Naming**: Assign a name to each experiment, which is then included in the saved filename for easy identification.
+- **Data Logging**: Use the "Start"/"Stop" button to log specific segments of the data stream.
+- **Live Log Viewer**: A scrollable log viewer at the bottom of the window shows raw data coming from the serial port.
+- **CSV Export**: Logged data is saved to a CSV file containing timestamps, loadcell values, and RPM.
+- **Mock Mode**: Test the application's full functionality without any physical hardware.
 
 ---
 
-## 설치 방법
+## Installation
 
 1. **Python 3.x 설치**
 2. **가상환경(venv) 생성 및 활성화**
@@ -35,44 +31,30 @@
 
 ---
 
-## 실행 방법
+## How to Use
 
-1. **시리얼 포트 설정(main.py 상단)**
-   - macOS: `/dev/tty.usbmodemXXXX` 형태
-   - Windows: `COM3`, `COM4` 등
-   - 실제 아두이노 연결 후 포트명을 확인하여 `SERIAL_PORT` 변수에 입력
+1.  **Set Serial Port & Connect**:
+    -   Run the program (`python main.py`).
+    -   At the top-left, enter the serial port name for your device (e.g., `COM3` on Windows, or `/dev/tty.usbmodemXXXX` on macOS).
+    -   Click the **"Connect"** button. The button will turn red ("Disconnect") and the log viewer at the bottom will confirm the connection.
 
-2. **mock 데이터로 테스트**
-   - `main.py`에서 `USE_MOCK = True`로 설정하면 하드웨어 없이 임의의 데이터로 그래프 테스트 가능
-   - 실제 측정 시에는 `USE_MOCK = False`로 변경
+2.  **Name Your Experiment (Optional)**:
+    -   In the "Experiment:" text box at the top, give your current test a name (e.g., `15_knots`).
 
-3. **프로그램 실행**
-   ```bash
-   python main.py
-   ```
+3.  **Start Logging**:
+    -   Click the green **"Start"** button to begin logging data. The status window will show "Logging...".
 
----
+4.  **Stop Logging & Save**:
+    -   Click the red **"Stop"** button. The logging will stop, and the data will be saved to a CSV file.
+    -   The filename will automatically include the date, time, and the experiment name you entered.
+    -   Example Filename: `measurement_20240608_153000_15_knots.csv`
 
-## 사용법
-
-1. **실험명 입력 (선택 사항)**
-   - 프로그램 실행 후, 하단의 'Experiment:' 입력란에 해당 실험의 이름(예: `15 knot`)을 입력합니다.
-   - 이 이름은 나중에 저장될 파일명에 사용됩니다.
-
-2. **측정 시작**
-   - 하단의 "Start" 버튼 클릭 → 데이터 로깅 시작, 상태창에 "Logging..." 표시
-
-3. **측정 끝**
-   - 하단의 "Stop" 버튼 클릭 → 로깅 중이던 데이터가 CSV 파일로 저장됨
-   - 상태창에 "Saved" 메시지와 측정 시간 표시
-   - 저장 파일명 예시: `measurement_20240608_153000_15_knot.csv`
-
-4. **여러 번 측정 가능**
-   - "Start"/"Stop"을 반복하여 여러 구간을 각각 저장할 수 있음
+5.  **Disconnect**:
+    -   When you're finished, click the **"Disconnect"** button.
 
 ---
 
-## 데이터 포맷 예시
+## Data Format Example
 
 - **로드셀 데이터**: `[LoadCell] Cell 1: -57 | Cell 2: 7`
 - **모터 데이터**: `[Motor] RPM:1203, PWM: 122`
@@ -80,7 +62,7 @@
 
 ---
 
-## 기타
-- UI는 폰트 깨짐 문제를 방지하기 위해 모두 영어로 표시됩니다.
-- 그래프가 보이지 않거나 시리얼 연결이 안 될 경우, 포트명과 아두이노 연결 상태를 확인하세요.
-- 추가 기능(데이터 분석, 그래프 커스터마이즈 등)이 필요하면 언제든 문의해 주세요. 
+## Other Notes
+- The entire UI is in English to prevent font compatibility issues.
+- If the graph doesn't appear or the connection fails, double-check your serial port name and device connection.
+- Additional features or customizations can be requested. 
