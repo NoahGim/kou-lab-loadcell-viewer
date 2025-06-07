@@ -20,13 +20,8 @@ from matplotlib.gridspec import GridSpec
 SERIAL_PORT = '/dev/tty.usbserial-1130'  # macOS 예시, Windows는 'COM3' 등
 BAUDRATE = 9600
 
-CELL_1_CAL = 10000
-CELL_2_CAL = 12000
-# CELL_3_CAL = 12000
-# CELL_4_CAL = 12000
-
-# mock 데이터 사용 여부
-# USE_MOCK = True  # 이 줄을 삭제하고, 아래 로직으로 대체합니다.
+# --- 설정 상수 ---
+MAX_CELLS = 4
 
 # 데이터 버퍼
 MAXLEN = 100
@@ -107,18 +102,26 @@ def mock_reader(stop_event):
     log_view_data.append("[Info] Mock mode connected.")
     t = 0
     while not stop_event.is_set():
-        # 로드셀 mock 데이터 생성 (2개 채널)
-        cell1 = int(10000 + 2000 * random.uniform(-1, 1))
-        cell2 = int(12000 + 2000 * random.uniform(-1, 1))
-        loadcell_data.append([cell1, cell2])
+        # 로드셀 mock 데이터 생성 (1~4개 채널 랜덤)
+        num_cells = random.randint(1, MAX_CELLS)
+        # 보정 로직 없이 순수 랜덤 값 생성
+        cells = [int(10000 + 3000 * random.uniform(-1, 1)) for _ in range(num_cells)]
+        loadcell_data.append(cells)
+        
         # 모터 mock 데이터 생성
         rpm = int(1000 + 200 * random.uniform(-1, 1))
         rpm_data.append(rpm)
+
         if data_logging:
-            log_buffer.append((time.time(), cell1, cell2, rpm))
+            log_buffer.append((time.time(), *cells, rpm))
+        
+        # 로그 메시지를 동적으로 생성하여, 셀 개수에 상관없이 동작하도록 수정
+        cell_log_parts = [f"C{i+1}: {cells[i]}" for i in range(len(cells))]
+        log_message = f"[Mock] {', '.join(cell_log_parts)}, RPM: {rpm}"
+
         # 로그 추가 (자동 스크롤 로직 추가)
         is_at_bottom = (log_view_offset >= len(log_view_data) - LOG_VIEW_LINES)
-        log_view_data.append(f"[Mock] C1: {cell1}, C2: {cell2}, RPM: {rpm}")
+        log_view_data.append(log_message)
         if is_at_bottom:
             log_view_offset = len(log_view_data) - LOG_VIEW_LINES
         t += 1
@@ -159,22 +162,10 @@ def main():
     ax1 = fig.add_subplot(gs_graphs[0])
     ax2 = fig.add_subplot(gs_graphs[1])
 
-    # 우측 현재값 패널
-    gs_side = gs_main_area[0, 1].subgridspec(3, 1, hspace=0.5)
-    ax_val1 = fig.add_subplot(gs_side[0])
-    ax_val2 = fig.add_subplot(gs_side[1])
-    ax_val3 = fig.add_subplot(gs_side[2])
+    # 우측 현재값 패널 (최대 셀 개수 + RPM)
+    gs_side = gs_main_area[0, 1].subgridspec(MAX_CELLS + 1, 1, hspace=0.5)
+    ax_vals = [fig.add_subplot(gs_side[i]) for i in range(MAX_CELLS + 1)]
 
-    # 현재값 패널의 축/눈금 숨기기
-    for ax_val in [ax_val1, ax_val2, ax_val3]:
-        ax_val.set_facecolor('whitesmoke')
-        for spine in ax_val.spines.values(): spine.set_visible(False)
-        ax_val.set_xticks([]); ax_val.set_yticks([])
-
-    # --- 하단 로그 뷰어 ---
-    gs_bottom = gs[2].subgridspec(1, 1)
-    ax_log = fig.add_subplot(gs_bottom[0])
-    
     # --- 위젯 생성 ---
     port_box = TextBox(ax_port, 'Port:', initial=load_config())
     btn_connect = Button(ax_connect, 'Connect', color='lightgoldenrodyellow')
@@ -182,21 +173,30 @@ def main():
     btn_start_stop = Button(ax_start_stop, 'Start', color='lightgray')
     status_box = TextBox(ax_status, '', initial='Ready. Set port and connect.')
     status_box.set_active(False)
-    log_viewer = TextBox(ax_log, '', initial='--- Serial Log ---')
+    log_viewer = TextBox(ax_vals[-1], '', initial='--- Serial Log ---')
     log_viewer.set_active(False)
     
     # --- 그래프 설정 ---
     fig.suptitle('Real-time Loadcell & RPM Monitoring', fontsize=18, weight='bold')
     ax1.set_title('Loadcell Values'); ax2.set_title('Motor RPM')
-    lines = [ax1.plot([], [], label=f'Cell{i+1}', linewidth=1.5)[0] for i in range(2)]
+    lines = [ax1.plot([], [], label=f'Cell{i+1}', linewidth=1.5)[0] for i in range(MAX_CELLS)]
     ax1.set_ylabel('Value'); ax1.legend(loc='upper left')
     rpm_line, = ax2.plot([], [], color='crimson', label='RPM', linewidth=1.5)
     ax2.set_ylabel('RPM'); ax2.set_xlabel('Time (samples)'); ax2.legend(loc='upper left')
 
     # --- 현재값 텍스트 및 마우스 호버 기능 복구 ---
-    val1_text = ax_val1.text(0.5, 0.5, 'Cell 1:\n---', ha='center', va='center', fontsize=14, color=lines[0].get_color())
-    val2_text = ax_val2.text(0.5, 0.5, 'Cell 2:\n---', ha='center', va='center', fontsize=14, color=lines[1].get_color())
-    val3_text = ax_val3.text(0.5, 0.5, 'RPM:\n---', ha='center', va='center', fontsize=14, color=rpm_line.get_color())
+    val_texts = []
+    for i in range(MAX_CELLS):
+        text = ax_vals[i].text(0.5, 0.5, f'Cell {i+1}:\n---', ha='center', va='center', fontsize=14, color=lines[i].get_color())
+        val_texts.append(text)
+    
+    rpm_text = ax_vals[-1].text(0.5, 0.5, 'RPM:\n---', ha='center', va='center', fontsize=14, color=rpm_line.get_color())
+    val_texts.append(rpm_text)
+
+    # 초기에 모든 셀 텍스트와 라인 숨기기
+    for i in range(MAX_CELLS):
+        lines[i].set_visible(False)
+        val_texts[i].set_visible(False)
 
     annotations = [ax.annotate("", xy=(0,0), xytext=(20,20), textcoords="offset points",
                             bbox=dict(boxstyle="round", fc="w"), arrowprops=dict(arrowstyle="->")) for ax in [ax1, ax2]]
@@ -274,14 +274,18 @@ def main():
             data_logging = False
             elapsed = int(time.time() - log_start_time) if log_start_time else 0
             if log_buffer:
-                # 실험명을 파일명에 추가
-                exp_name = exp_box.text.replace(' ', '_').strip()
-                df = pd.DataFrame(log_buffer, columns=['timestamp', 'cell1', 'cell2', 'rpm'])
+                # 첫 데이터 기준으로 셀 개수 결정
+                num_cells = len(log_buffer[0]) - 2 # timestamp, rpm 제외
+                # 동적 컬럼 생성
+                columns = ['timestamp'] + [f'cell{i+1}' for i in range(num_cells)] + ['rpm']
+                df = pd.DataFrame(log_buffer, columns=columns)
                 t0 = df['timestamp'].iloc[0]
                 df['rel_time'] = df['timestamp'] - t0
                 now = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f'measurement_{now}_{exp_name}.csv' if exp_name else f'measurement_{now}.csv'
-                df[['rel_time', 'cell1', 'cell2', 'rpm']].to_csv(filename, index=False)
+                filename = f'measurement_{now}_{exp_box.text.replace(" ", "_").strip()}.csv' if exp_box.text.strip() else f'measurement_{now}.csv'
+                
+                save_columns = ['rel_time'] + [f'cell{i+1}' for i in range(num_cells)] + ['rpm']
+                df[save_columns].to_csv(filename, index=False)
                 print(f"[Saved] Data saved to {filename}.")
                 status_box.set_val(f'Saved ({elapsed//60:02d}:{elapsed%60:02d})')
             else:
@@ -296,7 +300,7 @@ def main():
             serial_thread.join(timeout=1)
 
     def on_scroll(event, offset_container=[log_view_offset]):
-        if event.inaxes != ax_log: return
+        if event.inaxes != ax_vals[-1]: return
         
         max_offset = max(0, len(log_view_data) - LOG_VIEW_LINES)
         
@@ -338,20 +342,39 @@ def main():
         
         # 그래프 및 현재값 업데이트
         if loadcell_data:
-            data = np.array(list(loadcell_data)); latest_vals = data[-1]
-            for i in range(2): lines[i].set_data(range(len(data)), data[:, i])
-            ax1.set_xlim(0, len(data)); ax1.set_ylim(data.min()*0.9, data.max()*1.1)
-            val1_text.set_text(f'Cell 1:\n{latest_vals[0]:.0f}'); val2_text.set_text(f'Cell 2:\n{latest_vals[1]:.0f}')
+            # 가장 최근 데이터의 셀 개수를 기준으로 필터링
+            num_cells = len(loadcell_data[-1])
+            consistent_data = [d for d in loadcell_data if len(d) == num_cells]
+
+            if consistent_data:
+                data = np.array(consistent_data)
+                latest_vals = data[-1]
+                
+                # 활성화된 셀 업데이트
+                for i in range(num_cells):
+                    lines[i].set_data(range(len(data)), data[:, i])
+                    lines[i].set_visible(True)
+                    val_texts[i].set_text(f'Cell {i+1}:\n{latest_vals[i]:.0f}')
+                    val_texts[i].set_visible(True)
+                
+                # 비활성화된 셀 숨기기
+                for i in range(num_cells, MAX_CELLS):
+                    lines[i].set_visible(False)
+                    val_texts[i].set_visible(False)
+                
+                ax1.set_xlim(0, len(data))
+                ax1.set_ylim(data.min()*0.9 if data.size > 0 else -1, data.max()*1.1 if data.size > 0 else 1)
         else:
-            val1_text.set_text('Cell 1:\n---'); val2_text.set_text('Cell 2:\n---')
+            for i in range(MAX_CELLS):
+                val_texts[i].set_text('Cell 1:\n---')
 
         if rpm_data:
             data = list(rpm_data)
             rpm_line.set_data(range(len(data)), data)
             ax2.set_xlim(0, len(data)); ax2.set_ylim(min(data)*0.9, max(data)*1.1)
-            val3_text.set_text(f'RPM:\n{data[-1]:.0f}')
+            val_texts[-1].set_text(f'RPM:\n{data[-1]:.0f}')
         else:
-            val3_text.set_text('RPM:\n---')
+            val_texts[-1].set_text('RPM:\n---')
 
         # 측정 중이면 경과 시간 실시간 표시
         if data_logging and log_start_time:
