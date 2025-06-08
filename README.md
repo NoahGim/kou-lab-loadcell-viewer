@@ -1,18 +1,18 @@
 # Real-time Loadcell & RPM Viewer
 
 ## Overview
-This program is designed to measure, visualize, and log data from 2 loadcells and an encoder motor (RPM) in real-time. It's built for lab experiments, providing a user-friendly interface to manage device connections, monitor data, and save experiment logs.
+This program is designed to measure, visualize, and log data from up to 4 loadcells and an encoder motor (RPM) in real-time. It provides a user-friendly interface to manage device connections, calibrate sensors, monitor data, and save experiment logs.
 
 ## Key Features
+- **Flexible Sensor Configuration**: Supports up to 4 loadcell channels.
+- **Live Data Visualization**: Displays data from each loadcell and motor RPM on separate, real-time graphs.
+- **Integrated Magnus Force & RPM Graph**: A dedicated graph visualizes the total Magnus force (calculated from all loadcells) and RPM on a shared timeline with dual Y-axes.
+- **Data Logging with Magnus Force**: Use the "Start"/"Stop" button to log specific segments of the data stream. Logged data includes individual cell weights, RPM, and the calculated Magnus force.
+- **Sensor Calibration**: A dedicated calibration window allows you to set scale and offset values for each loadcell channel to convert raw data into grams. Calibration settings are saved and automatically reloaded.
 - **Manual Connection Control**: Connect to and disconnect from your serial device manually.
-- **Persistent Port Name**: The last used serial port is automatically saved and reloaded.
-- **Live Data Visualization**: Displays data from 2 loadcells and motor RPM on separate, real-time graphs.
-- **Current Value & Hover Display**: Shows the latest numerical values and provides detailed data points on mouse hover.
-- **Experiment Naming**: Assign a name to each experiment, which is then included in the saved filename for easy identification.
-- **Data Logging**: Use the "Start"/"Stop" button to log specific segments of the data stream.
-- **Live Log Viewer**: A scrollable log viewer at the bottom of the window shows raw data coming from the serial port.
-- **CSV Export**: Logged data is saved to a CSV file containing timestamps, loadcell values, and RPM.
+- **Live Log Viewer**: A scrollable log viewer at the bottom of the window shows raw data coming from the serial port or application status messages.
 - **Mock Mode**: Test the application's full functionality without any physical hardware.
+- **Persistent Settings**: The serial port and calibration parameters are saved to `config.json` and `calibration.json` respectively, and are loaded on startup.
 
 ---
 
@@ -35,30 +35,42 @@ This program is designed to measure, visualize, and log data from 2 loadcells an
 
 1.  **Set Serial Port & Connect**:
     -   Run the program (`python main.py`).
-    -   At the top-left, enter the serial port name for your device (e.g., `COM3` on Windows, or `/dev/tty.usbmodemXXXX` on macOS).
+    -   At the top-left, enter the serial port name for your device (e.g., `COM3` on Windows, or `/dev/tty.usbmodemXXXX` on macOS). To use the mock mode, enter `mock`.
     -   Click the **"Connect"** button. The button will turn red ("Disconnect") and the log viewer at the bottom will confirm the connection.
 
-2.  **Name Your Experiment (Optional)**:
+2.  **Calibrate Sensors (Recommended)**:
+    - After connecting, click the **"Calibrate"** button on the right-side panel.
+    - In the new window, you can input known weights to automatically calculate the `scale` or manually enter `scale` and `offset` values for each channel.
+    - Click **"Save & Close"**. The new parameters will be applied immediately and saved in `calibration.json` for future sessions.
+
+3.  **Name Your Experiment (Optional)**:
     -   In the "Experiment:" text box at the top, give your current test a name (e.g., `15_knots`).
 
-3.  **Start Logging**:
+4.  **Start Logging**:
     -   Click the green **"Start"** button to begin logging data. The status window will show "Logging...".
 
-4.  **Stop Logging & Save**:
+5.  **Stop Logging & Save**:
     -   Click the red **"Stop"** button. The logging will stop, and the data will be saved to a CSV file.
     -   The filename will automatically include the date, time, and the experiment name you entered.
     -   Example Filename: `measurement_20240608_153000_15_knots.csv`
 
-5.  **Disconnect**:
+6.  **Disconnect**:
     -   When you're finished, click the **"Disconnect"** button.
 
 ---
 
 ## Data Format Example
 
-- **로드셀 데이터**: `[LoadCell] Cell 1: -57 | Cell 2: 7`
+- **로드셀 데이터**: `[LoadCell_input] Cell 1: -57 | Cell 4: 100 ...` (Raw data example)
 - **모터 데이터**: `[Motor] RPM:1203, PWM: 122`
-- **저장 CSV**: `rel_time,cell1,cell2,rpm`
+- **저장 CSV 컬럼**: `rel_time,cell1,cell2,cell3,cell4,rpm,magnus_force`
+
+---
+
+## Configuration Files
+
+- **`config.json`**: Stores the last used serial port name.
+- **`calibration.json`**: Stores the scale and offset for each loadcell channel. You can manually edit this file, but it's recommended to use the in-app calibration window.
 
 ---
 
