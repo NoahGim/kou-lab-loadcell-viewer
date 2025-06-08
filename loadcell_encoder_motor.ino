@@ -1,13 +1,15 @@
 #include "HX711.h"
 
+////////////////////////////////////////////
+//// 로드셀 설정
 #define DOUT1  6 //데이터핀 3번핀
 #define CLK1  7   // 클럭핀 2번핀
 
-#define DOUT2  9 //데이터핀 7번핀
-#define CLK2  8   // 클럭핀 2번핀
+#define DOUT2  12 //데이터핀 7번핀
+#define CLK2  13   // 클럭핀 2번핀
 
-#define DOUT3  10 //데이터핀 9번핀
-#define CLK3  11   // 클럭핀 8번핀
+#define DOUT3  14 //데이터핀 9번핀
+#define CLK3  15   // 클럭핀 8번핀
 
 #define DOUT4  4 //데이터핀 10번핀
 #define CLK4  5   // 클럭핀 11번핀
@@ -16,6 +18,38 @@ HX711 scale1;
 HX711 scale2;
 HX711 scale3;
 HX711 scale4;
+////////////////////////////////////////////
+
+////////////////////////////////////////////
+//// 인코더 모터 설정
+// 핀 설정
+const int IN1 = 10;
+const int IN2 = 9;
+const int ENA = 11;
+const int ENC_A = 2;
+const int ENC_B = 3;
+
+// PI 제어 변수
+float targetRPM = 0.0;
+float currentRPM = 0.0;
+float Kp = 0.05;
+float Ki = 0.05;
+float Kd = 0.01;
+float integral = 0;
+float previousRPM = 0;
+
+
+// 모터제어 변수
+int pwmOutput = 80;
+volatile long encoderCount = 0;
+unsigned long lastTime = 0;
+long lastEncoder = 0;
+
+// 모터 CPR
+const float CPR = 380.0;
+
+bool print_motor = false;
+////////////////////////////////////////////
 
 void setup_serial()
 {
@@ -147,15 +181,85 @@ void set_tare_scale(HX711 scale)
 }
 
 
+// 인코더 모터 셋업
+void setup_motor() {
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENA, OUTPUT);
+
+  pinMode(ENC_A, INPUT_PULLUP);
+  pinMode(ENC_B, INPUT_PULLUP);
+
+  // 인터럽트 함수 적용
+  attachInterrupt(digitalPinToInterrupt(ENC_A), encoderISR, RISING);
+  // attachInterrupt(digitalPinToInterrupt(ENC_B), encoderISRB, RISING);
+
+  // 모터 정방향
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  lastTime = millis();
+}
+
+// 인코더 모터 등각속도 제어
+
+
+void control_motor() {
+  unsigned long now = millis();
+  float dt = (now - lastTime) / 1000.0;  // 초 단위
+  if (dt >= 0.2) {  // 200ms 주기
+
+    noInterrupts();
+    long count = encoderCount;
+    interrupts();
+
+    long deltaCount = count - lastEncoder;
+    lastEncoder = count;
+
+    currentRPM = (deltaCount / CPR) / dt * 60.0;
+
+    float error = targetRPM - currentRPM;
+    integral += error * dt;
+    float control = Kp * error + Ki * integral;
+
+    pwmOutput = (int)control;
+    pwmOutput = constrain(pwmOutput, 0, 255);
+
+    analogWrite(ENA, pwmOutput);
+
+    if ( print_motor ) {
+      Serial.print("[Motor] ");
+      Serial.print("RPM: ");
+      Serial.print(currentRPM);
+      Serial.print(" | PWM: ");
+      Serial.println(pwmOutput);
+    }
+    
+
+    lastTime = now;
+  }
+}
+
+// 모터 isr 증가
+void encoderISR() {
+  // Serial.println("encoder ISR interrupted!!");
+  encoderCount++;
+}
+
+void encoderISRB() {
+    // Serial.println("encoder ISR-B interrupted!!");
+}
+
 void setup() {
   setup_serial();
   setup_scale();
-
+  setup_motor();
   Serial.println("Initialize complete");
 }
 
 void loop() {
   check_calibration_scale();
   print_cell_weight();
+  control_motor();
   delay(100);
 }
