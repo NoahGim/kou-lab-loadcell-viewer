@@ -73,5 +73,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/macos-latest-artifact/*.zip
-            artifacts/windows-latest-artifact/*.zip
+            artifacts/macOS-artifact/*.zip
+            artifacts/Windows-artifact/*.zip
