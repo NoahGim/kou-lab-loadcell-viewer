@@ -2,11 +2,11 @@ import re
 
 def parse_loadcell(line: str):
     """
-    [LoadCell] Cell 1: -57 | Cell 4: 100 ...
+    [LoadCell_input] Cell 1: -57 | Cell 4: 100 ...
     형식의 문자열에서 (셀 인덱스, 값) 튜플의 리스트를 반환
     (예: [(0, -57), (3, 100)])
     """
-    if not line.startswith('[LoadCell]'):
+    if not line.startswith('[LoadCell_input]'):
         return None
     # 'Cell <number>: <value>' 패턴을 모두 찾아 숫자와 값을 캡처
     pattern = r'Cell\s*(\d+):\s*([\-\d]+)'
