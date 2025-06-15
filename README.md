@@ -79,7 +79,8 @@ This program is designed to measure, visualize, and log data from up to 4 loadce
 - If the graph doesn't appear or the connection fails, double-check your serial port name and device connection.
 - Additional features or customizations can be requested. 
 
-
+## calibration factor
+```json
 {
   "cell_1": {
     "scale": 3192.13630406291,
@@ -98,3 +99,5 @@ This program is designed to measure, visualize, and log data from up to 4 loadce
     "offset": -439.43119266054964
   }
 }
+```
+
