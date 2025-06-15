@@ -26,7 +26,7 @@ BAUDRATE = 9600
 MAX_CELLS = 4
 
 # 데이터 버퍼
-MAXLEN = 100
+MAXLEN = 500
 loadcell_data = deque(maxlen=MAXLEN)
 rpm_data = deque(maxlen=MAXLEN)
 log_view_data = [] # Deque가 아닌 일반 리스트로 변경하여 모든 로그 저장
