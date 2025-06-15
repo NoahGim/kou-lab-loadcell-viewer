@@ -8,12 +8,12 @@ def parse_loadcell(line: str):
     """
     if not line.startswith('[LoadCell_input]'):
         return None
-    # 'Cell <number>: <value>' 패턴을 모두 찾아 숫자와 값을 캡처
-    pattern = r'Cell\s*(\d+):\s*([\-\d]+)'
+    # 'Cell <number>: <value>' 패턴을 모두 찾아 숫자와 값을 캡처 (소수점 포함)
+    pattern = r'Cell\s*(\d+):\s*([\-\d\.]+)'
     matches = re.findall(pattern, line)
     if matches:
-        # 셀 번호는 1-based이므로 0-based 인덱스로 변환
-        return [(int(num) - 1, int(val)) for num, val in matches]
+        # 셀 번호는 1-based이므로 0-based 인덱스로, 값은 float으로 변환
+        return [(int(num) - 1, float(val)) for num, val in matches]
     return None
 
 def parse_motor(line: str):

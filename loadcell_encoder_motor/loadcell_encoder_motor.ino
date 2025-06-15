@@ -122,37 +122,43 @@ void check_calibration_scale() {
     // [LoadCell_{cell_number}] tare
     
     if(input.startsWith("[LoadCell_")) {
-      int cell_number = input.substring(9, 10).toInt();
-      int calibration_factor = input.substring(11).toInt();
-      String command = input.substring(11);
+      int cell_number = input.substring(10, 11).toInt();
+      String command_part = input.substring(13); // "cal:value" or "tare"
 
-      
-      if(cell_number == 1) {
-        if (command.startsWith("cal:")) {
-          set_calibration_scale(scale1, calibration_factor);
-        } else if(command.startsWith("tare")) {
-          set_tare_scale(scale1);
+      if (command_part.startsWith("cal:")) {
+        Serial.print("test test cal: ");
+        Serial.println(cell_number);
+
+        // "cal:" 다음의 값을 float으로 추출
+        String cal_value_str = command_part.substring(4);
+        float calibration_factor = cal_value_str.toFloat();
+        
+        if(cell_number == 1) {
+          set_calibration_scale(&scale1, calibration_factor);
+        } else if(cell_number == 2) {
+          set_calibration_scale(&scale2, calibration_factor);
+        } else if(cell_number == 3) {
+          set_calibration_scale(&scale3, calibration_factor);
+        } else if(cell_number == 4) {
+          set_calibration_scale(&scale4, calibration_factor);
+        } else {
+          Serial.println("Invalid cell number");
         }
-      } else if(cell_number == 2) {
-        if (command.startsWith("cal:")) {
-          set_calibration_scale(scale2, calibration_factor);
-        } else if(command.startsWith("tare")) {
-          set_tare_scale(scale2);
+      } else if (command_part.startsWith("tare")) {
+        Serial.print("test test tare: ");
+        Serial.println(cell_number);
+
+        if(cell_number == 1) {
+          set_tare_scale(&scale1);
+        } else if(cell_number == 2) {
+          set_tare_scale(&scale2);
+        } else if(cell_number == 3) {
+          set_tare_scale(&scale3);
+        } else if(cell_number == 4) {
+          set_tare_scale(&scale4);
+        } else {
+          Serial.println("Invalid cell number");
         }
-      } else if(cell_number == 3) {
-        if (command.startsWith("cal:")) {
-          set_calibration_scale(scale3, calibration_factor);
-        } else if(command.startsWith("tare")) {
-          set_tare_scale(scale3);
-        }
-      } else if(cell_number == 4) {
-        if (command.startsWith("cal:")) {
-          set_calibration_scale(scale4, calibration_factor);
-        } else if(command.startsWith("tare")) {
-          set_tare_scale(scale4);
-        }
-      } else {
-        Serial.println("Invalid cell number");
       }
     }
   }
@@ -161,23 +167,23 @@ void check_calibration_scale() {
 void print_cell_weight() {
   // [LoadCell_input] Cell 1: -57 | Cell 4: 100 ...
   Serial.print("[LoadCell_input] Cell 1: ");
-  Serial.print(scale1.get_units(), 1);
+  Serial.print(scale1.get_units(1), 1);
   Serial.print(" | Cell 2: ");
-  Serial.print(scale2.get_units(), 1);
+  Serial.print(scale2.get_units(1), 1);
   Serial.print(" | Cell 3: ");
-  Serial.print(scale3.get_units(), 1);
+  Serial.print(scale3.get_units(1), 1);
   Serial.print(" | Cell 4: ");
-  Serial.println(scale4.get_units(), 1);
+  Serial.println(scale4.get_units(1), 1);
 }
 
-void set_calibration_scale(HX711 scale, int calibration_factor)
+void set_calibration_scale(HX711 *scale, float calibration_factor)
 {
-  scale.set_scale(calibration_factor); //Adjust to this calibration factor
+  scale->set_scale(calibration_factor); //Adjust to this calibration factor
 }
 
-void set_tare_scale(HX711 scale)
+void set_tare_scale(HX711 *scale)
 {
-  scale.tare(); //Reset the scale to 0
+  scale->tare(); //Reset the scale to 0
 }
 
 

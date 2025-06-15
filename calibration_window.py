@@ -29,9 +29,10 @@ def set_korean_font():
 set_korean_font()
 
 class CalibrationWindow:
-    def __init__(self, loadcell_data_deque, initial_params, save_callback):
+    def __init__(self, ser, loadcell_data_deque, initial_params, save_callback):
+        self.ser = ser
         self.loadcell_data = loadcell_data_deque
-        self.cal_params = initial_params
+        self.cal_params = initial_params.copy()
         self.save_callback = save_callback
 
         self.fig, self.ax = plt.subplots(figsize=(8, 7))
@@ -55,25 +56,29 @@ class CalibrationWindow:
         self.animation = FuncAnimation(self.fig, self.update_live_values, interval=200)
 
     def setup_widgets(self):
-        self.ax.text(0.05, 0.95, "1. Select Cell & Add Points", transform=self.ax.transAxes, fontsize=12, weight='bold')
+        self.ax.text(0.05, 0.95, "1. Select Cell, Tare, and Add Points", transform=self.ax.transAxes, fontsize=12, weight='bold')
         
-        # 셀 선택 라디오 버튼
+        # 셀 선택 라디오 버튼 및 Tare 버튼
         ax_radio = plt.axes([0.05, 0.8, 0.2, 0.15])
         self.radio_cell = RadioButtons(ax_radio, ('Cell 1', 'Cell 2', 'Cell 3', 'Cell 4'))
         self.radio_cell.on_clicked(self.on_cell_select)
+        
+        ax_tare = plt.axes([0.25, 0.8, 0.1, 0.05])
+        self.btn_tare = Button(ax_tare, 'Tare Cell')
+        self.btn_tare.on_clicked(self.on_tare_cell)
 
         # 무게 입력
-        ax_weight = plt.axes([0.3, 0.85, 0.15, 0.05])
+        ax_weight = plt.axes([0.4, 0.85, 0.15, 0.05])
         self.text_known_weight = TextBox(ax_weight, "Known W (g):", initial="100.0")
 
         # 측정 시작/추가 버튼
-        ax_read = plt.axes([0.5, 0.85, 0.2, 0.05])
+        ax_read = plt.axes([0.6, 0.85, 0.2, 0.05])
         self.btn_read = Button(ax_read, 'Start Reading Live')
         self.btn_read.on_clicked(self.on_read_toggle)
 
         # 현재 raw 값 표시
-        self.ax.text(0.75, 0.875, "Live Raw:", transform=self.ax.transAxes)
-        self.live_raw_text = self.ax.text(0.88, 0.875, "---", transform=self.ax.transAxes, color='red', weight='bold')
+        self.ax.text(0.8, 0.875, "Live Raw:", transform=self.ax.transAxes)
+        self.live_raw_text = self.ax.text(0.9, 0.875, "---", transform=self.ax.transAxes, color='red', weight='bold')
         
         # 포인트 테이블
         self.ax.text(0.05, 0.7, "Measured Points:", transform=self.ax.transAxes)
@@ -88,12 +93,12 @@ class CalibrationWindow:
 
         # 계산 버튼
         ax_calc = plt.axes([0.05, 0.4, 0.4, 0.07])
-        self.btn_calc = Button(ax_calc, 'Calculate Scale & Offset from Points')
+        self.btn_calc = Button(ax_calc, 'Calculate Scale Factor from Points')
         self.btn_calc.on_clicked(self.on_calculate)
         
         # 결과 표시
-        self.ax.text(0.05, 0.3, "Results:", transform=self.ax.transAxes)
-        self.result_text = self.ax.text(0.05, 0.28, "Scale (a): ---\nOffset (b): ---\nR-squared: ---", transform=self.ax.transAxes, va='top', family='monospace')
+        self.ax.text(0.05, 0.3, "Result:", transform=self.ax.transAxes)
+        self.result_text = self.ax.text(0.05, 0.28, "Scale: ---\nR-squared: ---", transform=self.ax.transAxes, va='top', family='monospace')
 
         # 테스트
         self.ax.text(0.5, 0.3, "Live Test (g):", transform=self.ax.transAxes)
@@ -123,11 +128,10 @@ class CalibrationWindow:
         # 버튼 상태 업데이트
         self.btn_calc.set_active(len(points) >= 2)
         
-        # 결과 텍스트 업데이트
+        # 결과 텍스트 업데이트 (offset 제거)
         key = f"cell_{self.selected_cell_idx+1}"
-        s = self.cal_params[key]['scale']
-        o = self.cal_params[key]['offset']
-        self.result_text.set_text(f"Scale (a): {s:.4f}\nOffset (b): {o:.2f}\n(Loaded from file)")
+        s = self.cal_params[key]
+        self.result_text.set_text(f"Scale: {s:.4f}\nR-squared: {r_value**2:.6f}")
 
         self.fig.canvas.draw_idle()
 
@@ -137,6 +141,15 @@ class CalibrationWindow:
         self.btn_read.label.set_text('Start Reading Live')
         self.btn_read.color = 'lightgoldenrodyellow'
         self.update_display()
+
+    def on_tare_cell(self, event):
+        if self.ser and self.ser.is_open:
+            cell_num = self.selected_cell_idx + 1
+            command = f"[LoadCell_{cell_num}] tare\n"
+            self.ser.write(command.encode('utf-8'))
+            print(f"Sent tare command to Cell {cell_num}")
+        else:
+            print("Serial port not connected. Cannot send tare command.")
 
     def on_read_toggle(self, event):
         if not self.is_reading_live:
@@ -162,17 +175,18 @@ class CalibrationWindow:
         known_weights = np.array([p[0] for p in points])
         raw_values = np.array([p[1] for p in points])
 
-        # raw = scale * grams + offset  -> y = a*x + b
-        # y: raw_values, x: known_weights
+        # raw_values = scale * known_weights (offset은 tare로 처리됨)
+        # y = a*x 형태의 회귀. y/x의 평균으로 scale 추정
+        # 단, 0g 지점이 포함될 수 있으므로 일반적인 linregress 사용이 더 안정적
+        # y = a*x + b 에서 b는 0에 가까워야 함.
         res = linregress(known_weights, raw_values)
         
-        scale, offset, r_value = res.slope, res.intercept, res.rvalue
+        scale, r_value = res.slope, res.rvalue
         
         key = f"cell_{self.selected_cell_idx+1}"
-        self.cal_params[key]['scale'] = scale
-        self.cal_params[key]['offset'] = offset
+        self.cal_params[key] = scale
 
-        self.result_text.set_text(f"Scale (a): {scale:.4f}\nOffset (b): {offset:.2f}\nR-squared: {r_value**2:.6f}")
+        self.result_text.set_text(f"Scale: {scale:.4f}\nR-squared: {r_value**2:.6f}")
         self.fig.canvas.draw_idle()
 
     def update_live_values(self, frame):
@@ -189,12 +203,15 @@ class CalibrationWindow:
             self.current_raw_value = raw_val
             self.live_raw_text.set_text(str(raw_val))
             
-            # 라이브 테스트
+            # 라이브 테스트 (offset 제거)
             key = f"cell_{self.selected_cell_idx+1}"
-            s = self.cal_params[key]['scale']
-            o = self.cal_params[key]['offset']
+            s = self.cal_params[key]
             if s != 0:
-                gram_val = (raw_val - o) / s
+                # 아두이노에서 이미 보정된 값이 오지만, UI에서 즉시 테스트하기 위해
+                # 현재 창의 파라미터로 계산. 
+                # Tare 이후의 raw값을 기준으로 계산해야 정확.
+                # raw = scale * grams -> grams = raw / scale
+                gram_val = raw_val / s
                 self.live_gram_text.set_text(f"{gram_val:.2f} g")
         else:
             self.live_raw_text.set_text("---")

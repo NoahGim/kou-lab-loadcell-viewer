@@ -48,8 +48,8 @@ serial_thread = None
 stop_thread = threading.Event()
 ser = None # 시리얼 객체
 
-# 캘리브레이션 파라미터
-calibration_params = {f"cell_{i+1}": {"scale": 1.0, "offset": 0.0} for i in range(MAX_CELLS)}
+# 캘리브레이션 파라미터 (단순화된 구조: scale 값만 저장)
+calibration_params = {f"cell_{i+1}": 1.0 for i in range(MAX_CELLS)}
 
 # --- 설정 관리 ---
 def save_config(port):
@@ -68,32 +68,80 @@ def load_calibration_params():
         if os.path.exists('calibration.json'):
             with open('calibration.json', 'r') as f:
                 params = json.load(f)
-                # JSON 파일의 키와 현재 설정의 키가 일치하는지 확인하며 로드
+                # 단순화된 JSON 구조에 맞게 파라미터 로드
                 for i in range(MAX_CELLS):
                     key = f"cell_{i+1}"
                     if key in params:
-                        calibration_params[key] = params[key]
+                        # offset 없이 scale 값만 직접 할당
+                        calibration_params[key] = float(params[key])
             print("[Info] Calibration parameters loaded.")
     except Exception as e:
         print(f"[Error] Failed to load calibration file: {e}")
 
 def save_calibration_params(params):
-    global calibration_params
+    global calibration_params, ser, is_connected
     calibration_params = params
     try:
         with open('calibration.json', 'w') as f:
             json.dump(params, f, indent=2)
         print("[Info] Calibration parameters saved.")
+        
+        # Arduino에 변경된 calibration 값 즉시 전송
+        if ser and is_connected:
+            print("[Info] Sending updated calibration factors to device...")
+            for i in range(MAX_CELLS):
+                key = f"cell_{i+1}"
+                if key in params:
+                    factor = params[key]
+                    command = f"[LoadCell_{i+1}] cal:{factor}\n"
+                    ser.write(command.encode('utf-8'))
+                    time.sleep(1) # 각 명령 전송 후 짧은 딜레이
+            print("[Info] Updated calibration factors sent.")
+            
     except Exception as e:
-        print(f"[Error] Failed to save calibration file: {e}")
+        print(f"[Error] Failed to save or send calibration file: {e}")
 
 # --- 시리얼 통신 스레드 ---
 def serial_reader(port, baud, stop_event):
     global ser, is_connected, log_view_offset, log_buffer, rpm_data, last_logged_cell_values
     try:
-        ser = serial.Serial(port, baud, timeout=0.1)
-        is_connected = True
-        log_view_data.append(f"[Info] Connected to {port}")
+        ser = serial.Serial(port, baud, timeout=1) # 타임아웃 1초로 명확하게 설정
+        
+        # "Initialize complete" 핸드셰이크
+        init_complete = False
+        log_view_data.append("[Info] Waiting for device to initialize...")
+        start_time = time.time()
+        while time.time() - start_time < 20: # 5초 타임아웃
+            line = ser.readline().decode(errors='ignore').strip()
+            if line:
+                log_view_data.append(line)
+            if "Initialize complete" in line:
+                is_connected = True
+                init_complete = True
+                log_view_data.append(f"[Info] Connected to {port}")
+                break
+        
+        if not init_complete:
+            log_view_data.append("[Error] Device initialization timeout.")
+            is_connected = False
+            if ser: ser.close()
+            return
+            
+        # 연결 성공 후, calibration.json 값 전송 및 tare 실행
+        log_view_data.append("[Info] Sending calibration and taring...")
+        for i in range(1, MAX_CELLS + 1):
+            key = f"cell_{i}"
+            factor = calibration_params[key]
+            # 1. Calibration 값 전송
+            cal_command = f"[LoadCell_{i}] cal:{factor}\n"
+            ser.write(cal_command.encode('utf-8'))
+            time.sleep(1)
+            # 2. Tare 명령 전송
+            tare_command = f"[LoadCell_{i}] tare\n"
+            ser.write(tare_command.encode('utf-8'))
+            time.sleep(1)
+        log_view_data.append("[Info] Initial setup sent.")
+
     except Exception as e:
         log_view_data.append(f"[Error] Failed to connect: {e}")
         is_connected = False
@@ -113,12 +161,10 @@ def serial_reader(port, baud, stop_event):
                     loadcell_data.append(lc)
                     
                     if data_logging:
-                        # Update last_logged_cell_values with new data
+                        # Arduino에서 보정된 값이 오므로, Python에서 추가 계산 불필요
                         for cell_index, value in lc:
                             if 0 <= cell_index < MAX_CELLS:
-                                params = calibration_params[f'cell_{cell_index+1}']
-                                g_value = (value - params['offset']) / params['scale']
-                                last_logged_cell_values[cell_index] = g_value
+                                last_logged_cell_values[cell_index] = value
                         
                         # Calculate Magnus force from the most recent values of all cells
                         valid_weights = [w for w in last_logged_cell_values if np.isfinite(w)]
@@ -157,12 +203,10 @@ def mock_reader(stop_event):
         loadcell_data.append(cells)
         
         if data_logging:
-            # Update last_logged_cell_values with new data from the mock 'cells'
+            # Mock 데이터도 이미 보정되었다고 가정하고 직접 값 사용
             for cell_index, value in cells:
                 if 0 <= cell_index < MAX_CELLS:
-                    params = calibration_params[f'cell_{cell_index+1}']
-                    g_value = (value - params['offset']) / params['scale']
-                    last_logged_cell_values[cell_index] = g_value
+                    last_logged_cell_values[cell_index] = value
 
             # Calculate Magnus force from the most recent values of all cells
             valid_weights = [w for w in last_logged_cell_values if np.isfinite(w)]
@@ -227,9 +271,10 @@ def main():
     ax_rpm = ax_magnus_rpm.twinx() # Y축 공유
     
     # 우측 현재값 패널 (최대 셀 개수 + 매그너스 + RPM + 버튼)
-    gs_side = gs_main_area[0, 1].subgridspec(MAX_CELLS + 3, 1, hspace=0.6, height_ratios=[1]*(MAX_CELLS+2) + [0.8])
+    gs_side = gs_main_area[0, 1].subgridspec(MAX_CELLS + 4, 1, hspace=0.6, height_ratios=[1]*(MAX_CELLS+2) + [0.8, 0.8])
     ax_vals = [fig.add_subplot(gs_side[i]) for i in range(MAX_CELLS + 2)]
-    ax_calibrate_btn = fig.add_subplot(gs_side[MAX_CELLS + 2]) # Normalize -> Calibrate
+    ax_calibrate_btn = fig.add_subplot(gs_side[MAX_CELLS + 2])
+    ax_tare_all_btn = fig.add_subplot(gs_side[MAX_CELLS + 3]) # Tare All 버튼용 축
 
     # 현재값 패널의 축/눈금 숨기기
     for ax_val in ax_vals:
@@ -251,6 +296,7 @@ def main():
     log_viewer = TextBox(ax_log, '', initial='--- Serial Log ---') # ax_log로 재할당
     log_viewer.set_active(False)
     btn_calibrate = Button(ax_calibrate_btn, 'Calibrate', color='skyblue')
+    btn_tare_all = Button(ax_tare_all_btn, 'Tare All', color='lightyellow') # Tare All 버튼 생성
     
     # --- 그래프 설정 (2x2 그리드에 맞게 최적화) ---
     fig.suptitle('Real-time Loadcell & RPM Monitoring', fontsize=18, weight='bold')
@@ -405,6 +451,17 @@ def main():
             log_start_time = None
         update_start_stop_button() # 버튼 즉시 업데이트
 
+    def on_tare_all_click(event):
+        if ser and is_connected:
+            log_view_data.append("[Info] Taring all sensors...")
+            for i in range(1, MAX_CELLS + 1):
+                tare_command = f"[LoadCell_{i}] tare\n"
+                ser.write(tare_command.encode('utf-8'))
+                time.sleep(0.05)
+            log_view_data.append("[Info] Tare commands sent.")
+        else:
+            status_box.set_val("Not connected. Cannot send tare commands.")
+
     def on_close(event):
         stop_thread.set()
         if serial_thread and serial_thread.is_alive():
@@ -432,22 +489,21 @@ def main():
             status_box.set_val("Connect device before calibration.")
             return
 
-        # 메인 스레드를 잠시 멈추고 캘리브레이션 창에 집중
-        stop_thread.set()
-        if serial_thread and serial_thread.is_alive():
-            serial_thread.join(timeout=1)
+        # 캘리브레이션 창이 열려있는 동안 메인 스레드(데이터 수신)는 계속 동작하도록 수정
+        # (기존의 연결 중지/재시작 로직 제거)
         
-        # 캘리브레이션 창 열기
-        cal_window = CalibrationWindow(loadcell_data, calibration_params, save_calibration_params)
+        # 캘리브레이션 창 열기. 시리얼 객체를 전달하여 창 내에서 tare 등의 명령을 보낼 수 있게 함.
+        # 참고: 이 변경으로 인해 calibration_window.py의 생성자도 수정이 필요할 수 있습니다.
+        cal_window = CalibrationWindow(ser, loadcell_data, calibration_params, save_calibration_params)
         cal_window.show() # blocking
 
-        # 캘리브레이션 종료 후, 연결 자동 재시작
-        log_view_data.append("[Info] Calibration finished. Reconnecting...")
-        status_box.set_val("Calibration finished. Reconnecting...")
-        on_connect_toggle(None)
+        # 캘리브레이션 창이 닫힌 후, 특별히 할 작업은 없음.
+        # save_calibration_params 콜백이 새 값을 저장하고 Arduino에 전송하는 역할까지 담당함.
+        log_view_data.append("[Info] Calibration window closed.")
 
     btn_connect.on_clicked(on_connect_toggle)
     btn_start_stop.on_clicked(on_start_stop_toggle)
+    btn_tare_all.on_clicked(on_tare_all_click) # Tare All 버튼 이벤트 연결
     btn_calibrate.on_clicked(on_calibrate_click)
     fig.canvas.mpl_connect('close_event', on_close)
     fig.canvas.mpl_connect('scroll_event', on_scroll)
@@ -493,10 +549,8 @@ def main():
                     for p_idx, p_val in packet:
                         if p_idx == cell_idx:
                             history_x.append(time_step)
-                            # raw 값을 g으로 변환하여 표시
-                            params = calibration_params[f'cell_{p_idx+1}']
-                            g_value = (p_val - params['offset']) / params['scale']
-                            history_y.append(g_value)
+                            # Arduino에서 보정된 값이므로 추가 계산 없이 바로 사용
+                            history_y.append(p_val)
                 
                 # 데이터가 존재하면 그래프를 그리고 값을 업데이트
                 if history_y:
@@ -523,13 +577,12 @@ def main():
             magnus_x = list(range(len(loadcell_data)))
             
             # 1. 모든 셀의 보정된 무게를 (타임스텝, 셀) 매트릭스로 구성
+            # Arduino에서 보정된 값이므로 Python에서 추가 계산 불필요
             calibrated_weights = [[np.nan] * MAX_CELLS for _ in range(len(loadcell_data))]
             for time_step, packet in enumerate(loadcell_data):
                 for p_idx, p_val in packet:
                     if 0 <= p_idx < MAX_CELLS:
-                        params = calibration_params[f'cell_{p_idx+1}']
-                        g_value = (p_val - params['offset']) / params['scale']
-                        calibrated_weights[time_step][p_idx] = g_value
+                        calibrated_weights[time_step][p_idx] = p_val
             
             # 2. 누락된 데이터를 이전 값으로 채우기 (Forward Fill)
             for cell_idx in range(MAX_CELLS):
