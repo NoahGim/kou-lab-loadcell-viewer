@@ -31,9 +31,7 @@ jobs:
           pyinstaller main.py \
             --name "Loadcell-Viewer" \
             --windowed \
-            --add-data "utils:utils" \
-            --add-data "config.json:." \
-            --add-data "calibration.json:."
+            --add-data "utils:utils"
 
       - name: Build with PyInstaller (Windows)
         if: runner.os == 'Windows'
@@ -41,9 +39,7 @@ jobs:
           pyinstaller main.py `
             --name "Loadcell-Viewer" `
             --windowed `
-            --add-data "utils;utils" `
-            --add-data "config.json;." `
-            --add-data "calibration.json;."
+            --add-data "utils;utils"
 
       - name: Package build artifacts
         run: |

@@ -78,3 +78,23 @@ This program is designed to measure, visualize, and log data from up to 4 loadce
 - The entire UI is in English to prevent font compatibility issues.
 - If the graph doesn't appear or the connection fails, double-check your serial port name and device connection.
 - Additional features or customizations can be requested. 
+
+
+{
+  "cell_1": {
+    "scale": 3192.13630406291,
+    "offset": -125.03014416775841
+  },
+  "cell_2": {
+    "scale": 3003.59778597786,
+    "offset": 67.50000000000182
+  },
+  "cell_3": {
+    "scale": 3375.276752767528,
+    "offset": 100.00000000000364
+  },
+  "cell_4": {
+    "scale": 3341.5366972477063,
+    "offset": -439.43119266054964
+  }
+}

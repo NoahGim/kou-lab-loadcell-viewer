@@ -2,17 +2,17 @@
 
 ////////////////////////////////////////////
 //// 로드셀 설정
-#define DOUT1  6 //데이터핀 3번핀
-#define CLK1  7   // 클럭핀 2번핀
+#define DOUT1  6  // 로드셀 1 데이터핀 
+#define CLK1  7   // 로드셀 1 클럭핀 
 
-#define DOUT2  12 //데이터핀 7번핀
-#define CLK2  13   // 클럭핀 2번핀
+#define DOUT2  16  // 로드셀 2 데이터핀
+#define CLK2  17   // 로드셀 2 클럭핀
 
-#define DOUT3  14 //데이터핀 9번핀
-#define CLK3  15   // 클럭핀 8번핀
+#define DOUT3  14  // 로드셀 3 데이터핀
+#define CLK3  15   // 로드셀 3 클럭핀
 
-#define DOUT4  4 //데이터핀 10번핀
-#define CLK4  5   // 클럭핀 11번핀
+#define DOUT4  4  // 로드셀 4 데이터핀
+#define CLK4  5   // 로드셀 4 클럭핀
 
 HX711 scale1;
 HX711 scale2;
@@ -30,7 +30,7 @@ const int ENC_A = 2;
 const int ENC_B = 3;
 
 // PI 제어 변수
-float targetRPM = 0.0;
+float targetRPM = 1200.0;
 float currentRPM = 0.0;
 float Kp = 0.05;
 float Ki = 0.05;
@@ -48,7 +48,7 @@ long lastEncoder = 0;
 // 모터 CPR
 const float CPR = 380.0;
 
-bool print_motor = false;
+bool print_motor = true;
 ////////////////////////////////////////////
 
 void setup_serial()
@@ -62,8 +62,8 @@ void setup_serial()
 void setup_scale()
 {
     setup_scale_1();
-    // setup_scale_2();
-    // setup_scale_3();
+    setup_scale_2();
+    setup_scale_3();
     setup_scale_4();
 }
 
@@ -162,10 +162,10 @@ void print_cell_weight() {
   // [LoadCell_input] Cell 1: -57 | Cell 4: 100 ...
   Serial.print("[LoadCell_input] Cell 1: ");
   Serial.print(scale1.get_units(), 1);
-  // Serial.print(" | Cell 2: ");
-  // Serial.print(scale2.get_units(), 1);
-  // Serial.print(" | Cell 3: ");
-  // Serial.print(scale3.get_units(), 1);
+  Serial.print(" | Cell 2: ");
+  Serial.print(scale2.get_units(), 1);
+  Serial.print(" | Cell 3: ");
+  Serial.print(scale3.get_units(), 1);
   Serial.print(" | Cell 4: ");
   Serial.println(scale4.get_units(), 1);
 }
