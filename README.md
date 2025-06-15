@@ -80,24 +80,14 @@ This program is designed to measure, visualize, and log data from up to 4 loadce
 - Additional features or customizations can be requested. 
 
 ## calibration factor
+
+calibration.json
 ```json
 {
-  "cell_1": {
-    "scale": 3192.13630406291,
-    "offset": -125.03014416775841
-  },
-  "cell_2": {
-    "scale": 3003.59778597786,
-    "offset": 67.50000000000182
-  },
-  "cell_3": {
-    "scale": 3375.276752767528,
-    "offset": 100.00000000000364
-  },
-  "cell_4": {
-    "scale": 3341.5366972477063,
-    "offset": -439.43119266054964
-  }
+  "cell_1": 3192.13630406291,
+  "cell_2": 3003.59778597786,
+  "cell_3": 3375.276752767528,
+  "cell_4": 3341.5366972477063
 }
 ```
 
