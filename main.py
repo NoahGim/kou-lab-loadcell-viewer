@@ -567,7 +567,7 @@ def main():
                             margin = 10
                         cell_axes[cell_idx].set_ylim(data_min - margin, data_max + margin)
 
-                        val_texts[cell_idx].set_text(f'Cell {cell_idx+1}:\n{history_y[-1]:.2f} g')
+                        val_texts[cell_idx].set_text(f'Cell {cell_idx+1}:\n{history_y[-1]:.3f} g')
                         
                         # 해당 셀의 그래프와 값 표시를 활성화
                         cell_axes[cell_idx].set_visible(True)
