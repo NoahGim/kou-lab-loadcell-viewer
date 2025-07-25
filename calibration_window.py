@@ -57,7 +57,7 @@ class CalibrationWindow:
         self.animation = FuncAnimation(self.fig, self.update_live_values, interval=200)
 
     def setup_widgets(self):
-        self.ax.text(0.05, 0.95, "1. Select Cell, Tare, and Add Points", transform=self.ax.transAxes, fontsize=12, weight='bold')
+        # self.ax.text(0.05, 0.95, "1. Select Cell, Tare, and Add Points", transform=self.ax.transAxes, fontsize=12, weight='bold')
         
         # 셀 선택 라디오 버튼 및 Tare 버튼
         ax_radio = plt.axes([0.05, 0.8, 0.2, 0.15])
@@ -65,28 +65,28 @@ class CalibrationWindow:
         self.radio_cell.on_clicked(self.on_cell_select)
         
         ax_tare = plt.axes([0.25, 0.8, 0.1, 0.05])
-        self.btn_tare = Button(ax_tare, 'Initialize Cell')
+        self.btn_tare = Button(ax_tare, 'initialize')
         self.btn_tare.on_clicked(self.on_initialize_cell)
 
         # 무게 입력
         ax_weight = plt.axes([0.4, 0.85, 0.15, 0.05])
-        self.text_known_weight = TextBox(ax_weight, "Known W (g):", initial="100.0")
+        self.text_known_weight = TextBox(ax_weight, "weight (g):", initial="100.0")
 
         # 측정 시작/추가 버튼
         ax_read = plt.axes([0.6, 0.85, 0.2, 0.05])
-        self.btn_read = Button(ax_read, 'Start Reading Live')
+        self.btn_read = Button(ax_read, 'start')
         self.btn_read.on_clicked(self.on_read_toggle)
 
         # 현재 raw 값 표시
-        self.ax.text(0.8, 0.875, "Live Value (g):", transform=self.ax.transAxes)
+        self.ax.text(0.8, 0.875, "Live:", transform=self.ax.transAxes)
         self.live_raw_text = self.ax.text(0.9, 0.875, "---", transform=self.ax.transAxes, color='red', weight='bold')
         
         # 포인트 테이블
-        self.ax.text(0.05, 0.7, "Measured Points:", transform=self.ax.transAxes)
+        self.ax.text(0.05, 0.7, "Measured:", transform=self.ax.transAxes)
         self.table_text = self.ax.text(0.05, 0.68, "No points added yet.", transform=self.ax.transAxes, va='top', family='monospace')
         
         ax_clear = plt.axes([0.75, 0.7, 0.2, 0.05])
-        self.btn_clear = Button(ax_clear, 'Clear Points')
+        self.btn_clear = Button(ax_clear, 'Clear')
         self.btn_clear.on_clicked(self.on_clear_points)
 
         self.ax.axhline(0.55, color='gray', linestyle='--')
