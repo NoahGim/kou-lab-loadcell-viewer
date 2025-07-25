@@ -47,7 +47,8 @@ class CalibrationWindow:
         self.selected_cell_idx = 0
         self.measured_points = {i: [] for i in range(4)}
         self.is_reading_live = False
-        self.current_raw_value = 0
+        self.current_gram_value = 0
+        self.last_r_squared = {i: None for i in range(4)}
 
         self.setup_widgets()
         self.update_display()
@@ -64,8 +65,8 @@ class CalibrationWindow:
         self.radio_cell.on_clicked(self.on_cell_select)
         
         ax_tare = plt.axes([0.25, 0.8, 0.1, 0.05])
-        self.btn_tare = Button(ax_tare, 'Tare Cell')
-        self.btn_tare.on_clicked(self.on_tare_cell)
+        self.btn_tare = Button(ax_tare, 'Initialize Cell')
+        self.btn_tare.on_clicked(self.on_initialize_cell)
 
         # 무게 입력
         ax_weight = plt.axes([0.4, 0.85, 0.15, 0.05])
@@ -77,7 +78,7 @@ class CalibrationWindow:
         self.btn_read.on_clicked(self.on_read_toggle)
 
         # 현재 raw 값 표시
-        self.ax.text(0.8, 0.875, "Live Raw:", transform=self.ax.transAxes)
+        self.ax.text(0.8, 0.875, "Live Value (g):", transform=self.ax.transAxes)
         self.live_raw_text = self.ax.text(0.9, 0.875, "---", transform=self.ax.transAxes, color='red', weight='bold')
         
         # 포인트 테이블
@@ -121,17 +122,21 @@ class CalibrationWindow:
         if not points:
             self.table_text.set_text("No points added yet.")
         else:
-            table_str = "Known (g) | Raw Value\n" + "-"*25 + "\n"
-            table_str += "\n".join([f"{p[0]:<9.2f} | {p[1]}" for p in points])
+            table_str = "Known (g) | Est. Raw\n" + "-"*25 + "\n"
+            table_str += "\n".join([f"{p[0]:<9.2f} | {p[1]:.2f}" for p in points])
             self.table_text.set_text(table_str)
 
         # 버튼 상태 업데이트
         self.btn_calc.set_active(len(points) >= 2)
         
-        # 결과 텍스트 업데이트 (offset 제거)
+        # 결과 텍스트 업데이트
         key = f"cell_{self.selected_cell_idx+1}"
-        s = self.cal_params[key]
-        self.result_text.set_text(f"Scale: {s:.4f}\nR-squared: {r_value**2:.6f}")
+        s = self.cal_params.get(key, '---')
+        r2 = self.last_r_squared[self.selected_cell_idx]
+        
+        scale_str = f"Scale: {s:.4f}" if isinstance(s, float) else f"Scale: {s}"
+        r2_str = f"R-squared: {r2:.6f}" if isinstance(r2, float) else "R-squared: ---"
+        self.result_text.set_text(f"{scale_str}\n{r2_str}")
 
         self.fig.canvas.draw_idle()
 
@@ -142,12 +147,14 @@ class CalibrationWindow:
         self.btn_read.color = 'lightgoldenrodyellow'
         self.update_display()
 
-    def on_tare_cell(self, event):
+    def on_initialize_cell(self, event):
         if self.ser and self.ser.is_open:
             cell_num = self.selected_cell_idx + 1
-            command = f"[LoadCell_{cell_num}] tare\n"
-            self.ser.write(command.encode('utf-8'))
-            print(f"Sent tare command to Cell {cell_num}")
+            
+            # initialize calibration scale
+            command_cal = f"[LoadCell_{cell_num}] init\n"
+            self.ser.write(command_cal.encode('utf-8'))
+            print(f"Sent initialize command to Cell {cell_num}")
         else:
             print("Serial port not connected. Cannot send tare command.")
 
@@ -158,7 +165,14 @@ class CalibrationWindow:
             self.btn_read.color = 'lightgreen'
         else: # Add point
             known_weight = float(self.text_known_weight.text)
-            self.measured_points[self.selected_cell_idx].append((known_weight, self.current_raw_value))
+            
+            # [Fix] Arduino에서 이미 보정된 gram값이 오므로, 현재 scale을 곱해서 원래의 raw 값으로 역산.
+            # 이 역산된 raw 값으로 새로운 scale을 계산해야 함.
+            key = f"cell_{self.selected_cell_idx+1}"
+            current_scale = self.cal_params.get(key, 1.0)
+            # estimated_raw_value = self.current_gram_value * current_scale
+            estimated_raw_value = self.current_gram_value
+            self.measured_points[self.selected_cell_idx].append((known_weight, estimated_raw_value))
             self.is_reading_live = False
             self.btn_read.label.set_text('Start Reading Live')
             self.btn_read.color = 'lightgoldenrodyellow'
@@ -166,6 +180,7 @@ class CalibrationWindow:
             
     def on_clear_points(self, event):
         self.measured_points[self.selected_cell_idx] = []
+        self.last_r_squared[self.selected_cell_idx] = None
         self.update_display()
 
     def on_calculate(self, event):
@@ -185,34 +200,30 @@ class CalibrationWindow:
         
         key = f"cell_{self.selected_cell_idx+1}"
         self.cal_params[key] = scale
+        self.last_r_squared[self.selected_cell_idx] = r_value**2
 
-        self.result_text.set_text(f"Scale: {scale:.4f}\nR-squared: {r_value**2:.6f}")
-        self.fig.canvas.draw_idle()
+        self.update_display()
 
     def update_live_values(self, frame):
         # 가장 최근 데이터 패킷에서 선택된 셀의 raw 값 찾기
-        raw_val = None
+        gram_val = None
         if self.loadcell_data:
             latest_packet = self.loadcell_data[-1]
             for idx, val in latest_packet:
                 if idx == self.selected_cell_idx:
-                    raw_val = val
+                    gram_val = val
                     break
         
-        if raw_val is not None:
-            self.current_raw_value = raw_val
-            self.live_raw_text.set_text(str(raw_val))
+        if gram_val is not None:
+            self.current_gram_value = gram_val
+            self.live_raw_text.set_text(f"{gram_val:.2f} g")
             
             # 라이브 테스트 (offset 제거)
             key = f"cell_{self.selected_cell_idx+1}"
             s = self.cal_params[key]
             if s != 0:
-                # 아두이노에서 이미 보정된 값이 오지만, UI에서 즉시 테스트하기 위해
-                # 현재 창의 파라미터로 계산. 
-                # Tare 이후의 raw값을 기준으로 계산해야 정확.
-                # raw = scale * grams -> grams = raw / scale
-                gram_val = raw_val / s
-                self.live_gram_text.set_text(f"{gram_val:.2f} g")
+                gram_val_test = self.current_gram_value
+                self.live_gram_text.set_text(f"{gram_val_test:.2f} g")
         else:
             self.live_raw_text.set_text("---")
             self.live_gram_text.set_text("---")
