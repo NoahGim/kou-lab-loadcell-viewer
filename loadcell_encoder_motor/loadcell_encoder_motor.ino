@@ -120,13 +120,13 @@ void check_calibration_scale() {
     // Calibration Stream example: 
     // [LoadCell_{cell_number}] cal:{calibration_factor}
     // [LoadCell_{cell_number}] tare
-    
+    // [LoadCell_{cell_number}] init
     if(input.startsWith("[LoadCell_")) {
       int cell_number = input.substring(10, 11).toInt();
       String command_part = input.substring(13); // "cal:value" or "tare"
 
       if (command_part.startsWith("cal:")) {
-        Serial.print("test test cal: ");
+        Serial.print("set calibration factor: ");
         Serial.println(cell_number);
 
         // "cal:" 다음의 값을 float으로 추출
@@ -145,7 +145,7 @@ void check_calibration_scale() {
           Serial.println("Invalid cell number");
         }
       } else if (command_part.startsWith("tare")) {
-        Serial.print("test test tare: ");
+        Serial.print("tare cell: ");
         Serial.println(cell_number);
 
         if(cell_number == 1) {
@@ -159,6 +159,21 @@ void check_calibration_scale() {
         } else {
           Serial.println("Invalid cell number");
         }
+      } else if (command_part.startsWith("init")) {
+        Serial.print("initialize cell: ");
+        Serial.println(cell_number);
+
+        if(cell_number == 1) {
+          initialize_scale(&scale1);
+        } else if(cell_number == 2) {
+          initialize_scale(&scale2);
+        } else if(cell_number == 3) {
+          initialize_scale(&scale3);
+        } else if(cell_number == 4) {
+          initialize_scale(&scale4);
+        } else {
+          Serial.println("Invalid cell number");
+        }
       }
     }
   }
@@ -167,13 +182,13 @@ void check_calibration_scale() {
 void print_cell_weight() {
   // [LoadCell_input] Cell 1: -57 | Cell 4: 100 ...
   Serial.print("[LoadCell_input] Cell 1: ");
-  Serial.print(scale1.get_units(1), 1);
+  Serial.print(scale1.get_units(1), 3);
   Serial.print(" | Cell 2: ");
-  Serial.print(scale2.get_units(1), 1);
+  Serial.print(scale2.get_units(1), 3);
   Serial.print(" | Cell 3: ");
-  Serial.print(scale3.get_units(1), 1);
+  Serial.print(scale3.get_units(1), 3);
   Serial.print(" | Cell 4: ");
-  Serial.println(scale4.get_units(1), 1);
+  Serial.println(scale4.get_units(1), 3);
 }
 
 void set_calibration_scale(HX711 *scale, float calibration_factor)
@@ -184,6 +199,12 @@ void set_calibration_scale(HX711 *scale, float calibration_factor)
 void set_tare_scale(HX711 *scale)
 {
   scale->tare(); //Reset the scale to 0
+}
+
+void initialize_scale(HX711 *scale)
+{
+  set_calibration_scale(scale, 1.0);
+  set_tare_scale(scale);
 }
 
 
